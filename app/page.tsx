@@ -1,41 +1,109 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { supabase } from "@/lib/supabase" // 导入 Supabase 客户端
+import { supabase } from "@/lib/supabase" // Import Supabase client
 
-// 定义任务项的结构
+// Define the structure for a task item
 interface TaskItem {
   id: string
   text: string
   type: "heading" | "task"
-  completed?: boolean // Optional for headings, will be false in DB for headings
+  completed?: boolean // Optional for headings
+  order_index: number // To maintain order
 }
+
+// Initial tasks with temporary IDs and order_index for seeding
+const initialTasksData: Omit<TaskItem, "id">[] = [
+  { text: "第一阶段：准备与规划", type: "heading", completed: undefined, order_index: 0 },
+  {
+    text: "用10分钟，列出对报告的所有疑问（不求完美，目标是头脑风暴）",
+    type: "task",
+    completed: false,
+    order_index: 1,
+  },
+  { text: "创建一个简单的报告大纲，确定需要分析的关键维度", type: "task", completed: false, order_index: 2 },
+  {
+    text: "安排15分钟与主管沟通，确认报告范围和期望（记住：提问是专业的表现，不是能力不足）",
+    type: "task",
+    completed: false,
+    order_index: 3,
+  },
+  { text: "第二阶段：数据收集", type: "heading", completed: undefined, order_index: 4 },
+  {
+    text: "为每个产品分配30分钟，收集基本信息（使用番茄工作法，每30分钟休息5分钟）",
+    type: "task",
+    completed: false,
+    order_index: 5,
+  },
+  {
+    text: "咨询产品部门获取数据或测试（记住：团队合作是工作的一部分）",
+    type: "task",
+    completed: false,
+    order_index: 6,
+  },
+  { text: "第三阶段：分析与撰写", type: "heading", completed: undefined, order_index: 7 },
+  { text: "创建比较表格，突出各产品的优缺点", type: "task", completed: false, order_index: 8 },
+  { text: "撰写初稿（不求完美，目标是有一个可迭代的版本）", type: "task", completed: false, order_index: 9 },
+  { text: "请一位信任的同事审阅并提供优化建议", type: "task", completed: false, order_index: 10 },
+  { text: "根据反馈修改并完善报告", type: "task", completed: false, order_index: 11 },
+]
 
 export default function TaskListPage() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "success" | "failed">("connecting")
 
-  // 从 Supabase 获取任务
   const fetchTasks = useCallback(async () => {
-    setLoading(true)
-    setFetchError(null)
+    setIsLoading(true)
+    setError(null)
+    setConnectionStatus("connecting")
+
     try {
-      const { data, error } = await supabase.from("tasks").select("*").order("id", { ascending: true }) // 假设 id 可以用于排序，或者添加一个 order_index 字段
+      const { data, error } = await supabase.from("tasks").select("*").order("order_index", { ascending: true })
 
       if (error) {
-        throw error
+        console.error("Error fetching tasks:", error)
+        setError(error.message)
+        setConnectionStatus("failed")
+        return
       }
-      setTasks(data || [])
-    } catch (error: any) {
-      console.error("Error fetching tasks:", error.message)
-      setFetchError("无法连接到云端数据或获取任务列表。请检查您的 Supabase 配置。")
+
+      if (data.length === 0) {
+        // If no tasks exist, seed the database with initial data
+        const { error: insertError } = await supabase.from("tasks").insert(initialTasksData)
+        if (insertError) {
+          console.error("Error seeding initial tasks:", insertError)
+          setError(insertError.message)
+          setConnectionStatus("failed")
+          return
+        }
+        // Fetch again after seeding
+        const { data: newData, error: newError } = await supabase
+          .from("tasks")
+          .select("*")
+          .order("order_index", { ascending: true })
+        if (newError) {
+          console.error("Error refetching after seeding:", newError)
+          setError(newError.message)
+          setConnectionStatus("failed")
+          return
+        }
+        setTasks(newData as TaskItem[])
+      } else {
+        setTasks(data as TaskItem[])
+      }
+      setConnectionStatus("success")
+    } catch (e: any) {
+      console.error("Unexpected error:", e)
+      setError(e.message || "An unexpected error occurred.")
+      setConnectionStatus("failed")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }, [])
 
@@ -43,34 +111,35 @@ export default function TaskListPage() {
     fetchTasks()
   }, [fetchTasks])
 
-  // 切换任务完成状态并更新 Supabase
-  const toggleTaskCompletion = useCallback(
-    async (id: string) => {
-      // 乐观更新 UI
-      setTasks((prevTasks) =>
-        prevTasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)),
-      )
+  const toggleTaskCompletion = async (id: string) => {
+    // Optimistic update
+    setTasks((prevTasks) => prevTasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)))
 
-      const taskToUpdate = tasks.find((task) => task.id === id)
-      if (!taskToUpdate) return
+    const currentTask = tasks.find((task) => task.id === id)
+    if (!currentTask) return
 
-      try {
-        const { error } = await supabase.from("tasks").update({ completed: !taskToUpdate.completed }).eq("id", id)
+    try {
+      const { error } = await supabase.from("tasks").update({ completed: !currentTask.completed }).eq("id", id)
 
-        if (error) {
-          throw error
-        }
-      } catch (error: any) {
-        console.error("Error updating task completion:", error.message)
-        setFetchError("更新任务状态失败。请重试。")
-        // 如果更新失败，回滚 UI 状态
+      if (error) {
+        console.error("Error updating task in Supabase:", error)
+        setError(error.message)
+        setConnectionStatus("failed")
+        // Revert optimistic update if update fails
         setTasks((prevTasks) =>
           prevTasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)),
         )
       }
-    },
-    [tasks],
-  )
+    } catch (e: any) {
+      console.error("Unexpected error during update:", e)
+      setError(e.message || "An unexpected error occurred during update.")
+      setConnectionStatus("failed")
+      // Revert optimistic update
+      setTasks((prevTasks) =>
+        prevTasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)),
+      )
+    }
+  }
 
   const { completedPercentage, allTasksCompleted } = useMemo(() => {
     const actualTasks = tasks.filter((task) => task.type === "task")
@@ -87,21 +156,21 @@ export default function TaskListPage() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950 p-4 sm:p-6">
       <Card className="w-full max-w-2xl shadow-lg">
         <CardHeader>
-          <CardTitle className="text-3xl font-bold text-center">任务列表</CardTitle>
+          <CardTitle className="text-3xl font-bold text-center mb-4">任务列表</CardTitle>
+          {connectionStatus === "connecting" && (
+            <div className="text-center text-blue-600 dark:text-blue-400">正在连接云端数据...</div>
+          )}
+          {connectionStatus === "success" && (
+            <div className="text-center text-green-600 dark:text-green-400">已成功链接云端数据！</div>
+          )}
+          {connectionStatus === "failed" && (
+            <div className="text-center text-red-600 dark:text-red-400">链接失败: {error || "未知错误"}</div>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
-          {loading && <div className="text-center text-gray-600 dark:text-gray-400">正在加载任务...</div>}
-          {fetchError && (
-            <div className="text-center text-red-600 dark:text-red-400">
-              {fetchError}
-              <br />
-              请确保您的 Supabase URL 和 Anon Key 已正确配置，并且 RLS 已禁用。
-            </div>
-          )}
-          {!loading && !fetchError && tasks.length === 0 && (
-            <div className="text-center text-gray-600 dark:text-gray-400">没有任务。请在 Supabase 中添加一些任务。</div>
-          )}
-          {!loading && !fetchError && tasks.length > 0 && (
+          {isLoading ? (
+            <div className="text-center text-gray-600 dark:text-gray-400">加载中...</div>
+          ) : (
             <>
               <div className="w-full">
                 <div className="flex items-center justify-between mb-2">
