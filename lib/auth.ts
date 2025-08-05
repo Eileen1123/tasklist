@@ -110,4 +110,4 @@ async function initializeUserTasks(userId: string): Promise<void> {
   } catch (error) {
     console.error('Error initializing user tasks:', error)
   }
-} 
+}

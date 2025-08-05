@@ -32,24 +32,24 @@
 ## 快速开始
 
 ### 1. 安装依赖
-```bash
+\`\`\`bash
 pnpm install
-```
+\`\`\`
 
 ### 2. 配置环境变量
 创建 `.env.local` 文件：
-```env
+\`\`\`env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+\`\`\`
 
 ### 3. 初始化数据库
 访问 `http://localhost:3000/init` 并点击"初始化数据库"按钮。
 
 ### 4. 启动开发服务器
-```bash
+\`\`\`bash
 pnpm dev
-```
+\`\`\`
 
 ### 5. 访问应用
 打开浏览器访问 `http://localhost:3000`

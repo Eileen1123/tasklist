@@ -86,4 +86,4 @@ export async function initializeDatabase() {
     console.error("数据库初始化失败:", error)
     return { success: false, error }
   }
-} 
+}

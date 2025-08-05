@@ -93,4 +93,4 @@ export default function LoginPage() {
       </Card>
     </div>
   )
-} 
+}
