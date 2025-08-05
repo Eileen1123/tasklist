@@ -1,70 +1,69 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { supabase } from "@/lib/supabase" // Import Supabase client
+import { supabase } from "@/lib/supabase"
+import { User } from "@/lib/auth"
 
 // Define the structure for a task item
 interface TaskItem {
   id: string
   text: string
   type: "heading" | "task"
-  completed?: boolean // Optional for headings
-  order_index: number // To maintain order
+  completed?: boolean
+  order_index: number
 }
-
-// Initial tasks with temporary IDs and order_index for seeding
-const initialTasksData: Omit<TaskItem, "id">[] = [
-  { text: "第一阶段：准备与规划", type: "heading", completed: undefined, order_index: 0 },
-  {
-    text: "用10分钟，列出对报告的所有疑问（不求完美，目标是头脑风暴）",
-    type: "task",
-    completed: false,
-    order_index: 1,
-  },
-  { text: "创建一个简单的报告大纲，确定需要分析的关键维度", type: "task", completed: false, order_index: 2 },
-  {
-    text: "安排15分钟与主管沟通，确认报告范围和期望（记住：提问是专业的表现，不是能力不足）",
-    type: "task",
-    completed: false,
-    order_index: 3,
-  },
-  { text: "第二阶段：数据收集", type: "heading", completed: undefined, order_index: 4 },
-  {
-    text: "为每个产品分配30分钟，收集基本信息（使用番茄工作法，每30分钟休息5分钟）",
-    type: "task",
-    completed: false,
-    order_index: 5,
-  },
-  {
-    text: "咨询产品部门获取数据或测试（记住：团队合作是工作的一部分）",
-    type: "task",
-    completed: false,
-    order_index: 6,
-  },
-  { text: "第三阶段：分析与撰写", type: "heading", completed: undefined, order_index: 7 },
-  { text: "创建比较表格，突出各产品的优缺点", type: "task", completed: false, order_index: 8 },
-  { text: "撰写初稿（不求完美，目标是有一个可迭代的版本）", type: "task", completed: false, order_index: 9 },
-  { text: "请一位信任的同事审阅并提供优化建议", type: "task", completed: false, order_index: 10 },
-  { text: "根据反馈修改并完善报告", type: "task", completed: false, order_index: 11 },
-]
 
 export default function TaskListPage() {
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "success" | "failed">("connecting")
+  const [user, setUser] = useState<User | null>(null)
+  const router = useRouter()
+
+  // Check if user is logged in on component mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user")
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser)
+        setUser(userData)
+      } catch (error) {
+        console.error("Error parsing stored user:", error)
+        localStorage.removeItem("user")
+      }
+    }
+  }, [])
 
   const fetchTasks = useCallback(async () => {
+    if (!user) return
+
     setIsLoading(true)
     setError(null)
     setConnectionStatus("connecting")
 
     try {
-      const { data, error } = await supabase.from("tasks").select("*").order("order_index", { ascending: true })
+      // Fetch user-specific tasks with task details
+      const { data, error } = await supabase
+        .from('user_tasks')
+        .select(`
+          id,
+          completed,
+          tasks (
+            id,
+            text,
+            type,
+            order_index
+          )
+        `)
+        .eq('user_id', user.id)
 
       if (error) {
         console.error("Error fetching tasks:", error)
@@ -73,30 +72,18 @@ export default function TaskListPage() {
         return
       }
 
-      if (data.length === 0) {
-        // If no tasks exist, seed the database with initial data
-        const { error: insertError } = await supabase.from("tasks").insert(initialTasksData)
-        if (insertError) {
-          console.error("Error seeding initial tasks:", insertError)
-          setError(insertError.message)
-          setConnectionStatus("failed")
-          return
-        }
-        // Fetch again after seeding
-        const { data: newData, error: newError } = await supabase
-          .from("tasks")
-          .select("*")
-          .order("order_index", { ascending: true })
-        if (newError) {
-          console.error("Error refetching after seeding:", newError)
-          setError(newError.message)
-          setConnectionStatus("failed")
-          return
-        }
-        setTasks(newData as TaskItem[])
-      } else {
-        setTasks(data as TaskItem[])
-      }
+      // Transform the data to match our TaskItem interface and sort by order_index
+      const transformedTasks = data
+        .map((item: any) => ({
+          id: item.id,
+          text: item.tasks.text,
+          type: item.tasks.type,
+          completed: item.completed,
+          order_index: item.tasks.order_index
+        }))
+        .sort((a, b) => a.order_index - b.order_index)
+
+      setTasks(transformedTasks)
       setConnectionStatus("success")
     } catch (e: any) {
       console.error("Unexpected error:", e)
@@ -105,13 +92,19 @@ export default function TaskListPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
-    fetchTasks()
-  }, [fetchTasks])
+    if (user) {
+      fetchTasks()
+    } else {
+      setIsLoading(false)
+    }
+  }, [user, fetchTasks])
 
   const toggleTaskCompletion = async (id: string) => {
+    if (!user) return
+
     // Optimistic update
     setTasks((prevTasks) => prevTasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)))
 
@@ -119,7 +112,10 @@ export default function TaskListPage() {
     if (!currentTask) return
 
     try {
-      const { error } = await supabase.from("tasks").update({ completed: !currentTask.completed }).eq("id", id)
+      const { error } = await supabase
+        .from('user_tasks')
+        .update({ completed: !currentTask.completed })
+        .eq('id', id)
 
       if (error) {
         console.error("Error updating task in Supabase:", error)
@@ -141,6 +137,13 @@ export default function TaskListPage() {
     }
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem("user")
+    setUser(null)
+    setTasks([])
+    router.push("/login")
+  }
+
   const { completedPercentage, allTasksCompleted } = useMemo(() => {
     const actualTasks = tasks.filter((task) => task.type === "task")
     const totalTasks = actualTasks.length
@@ -152,11 +155,45 @@ export default function TaskListPage() {
     return { completedPercentage: percentage, allTasksCompleted: allDone }
   }, [tasks])
 
+  // Show login/register page if user is not logged in
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950 p-4 sm:p-6">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-3xl font-bold text-center">任务列表</CardTitle>
+            <div className="text-center text-gray-600 dark:text-gray-400">
+              请登录或注册以开始管理您的任务
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Link href="/login">
+              <Button className="w-full">登录</Button>
+            </Link>
+            <Link href="/register">
+              <Button variant="outline" className="w-full">注册</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950 p-4 sm:p-6">
       <Card className="w-full max-w-2xl shadow-lg">
         <CardHeader>
-          <CardTitle className="text-3xl font-bold text-center mb-4">任务列表</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-3xl font-bold">任务列表</CardTitle>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                欢迎，{user.username}！
+              </span>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                退出登录
+              </Button>
+            </div>
+          </div>
           {connectionStatus === "connecting" && (
             <div className="text-center text-blue-600 dark:text-blue-400">正在连接云端数据...</div>
           )}

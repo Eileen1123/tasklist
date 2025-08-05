@@ -1,30 +1,111 @@
-# Web page design task
+# 任务列表应用
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+一个基于 Next.js 和 Supabase 的现代化任务管理应用，支持用户认证和个性化任务管理。
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/lingyizhu-thoughtworks-projects/v0-web-page-design-task)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/OZCQP0nUHqK)
+## 功能特性
 
-## Overview
+### 🔐 用户认证
+- **用户注册**: 创建新账户，自动初始化任务列表
+- **用户登录**: 安全登录，使用 MD5 密码加密
+- **个性化任务**: 每个用户都有独立的任务进度
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+### 📋 任务管理
+- **三阶段任务流程**: 准备与规划 → 数据收集 → 分析与撰写
+- **实时进度跟踪**: 可视化完成进度
+- **任务状态管理**: 点击即可标记完成/未完成
+- **云端同步**: 数据实时保存到 Supabase
 
-## Deployment
+### 🎨 用户界面
+- **现代化设计**: 使用 Tailwind CSS 和 Radix UI
+- **深色/浅色主题**: 自动适应系统主题
+- **响应式布局**: 完美适配各种设备
+- **流畅交互**: 优化的用户体验
 
-Your project is live at:
+## 技术栈
 
-**[https://vercel.com/lingyizhu-thoughtworks-projects/v0-web-page-design-task](https://vercel.com/lingyizhu-thoughtworks-projects/v0-web-page-design-task)**
+- **前端**: Next.js 15, React 19, TypeScript
+- **样式**: Tailwind CSS, Radix UI
+- **后端**: Supabase (PostgreSQL)
+- **认证**: 自定义用户系统 (MD5 加密)
+- **包管理**: pnpm
 
-## Build your app
+## 快速开始
 
-Continue building your app on:
+### 1. 安装依赖
+```bash
+pnpm install
+```
 
-**[https://v0.dev/chat/projects/OZCQP0nUHqK](https://v0.dev/chat/projects/OZCQP0nUHqK)**
+### 2. 配置环境变量
+创建 `.env.local` 文件：
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-## How It Works
+### 3. 初始化数据库
+访问 `http://localhost:3000/init` 并点击"初始化数据库"按钮。
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+### 4. 启动开发服务器
+```bash
+pnpm dev
+```
+
+### 5. 访问应用
+打开浏览器访问 `http://localhost:3000`
+
+## 使用流程
+
+1. **首次访问**: 看到登录/注册界面
+2. **注册账户**: 填写用户名和密码，系统自动初始化任务列表
+3. **登录系统**: 使用注册的账户登录
+4. **管理任务**: 点击任务项标记完成状态
+5. **查看进度**: 实时查看完成进度百分比
+
+## 数据库结构
+
+### 表结构
+- `users`: 用户信息表
+- `tasks`: 任务模板表 (公共)
+- `user_tasks`: 用户任务关联表 (个性化)
+
+### 安全设置
+- 禁用 RLS (Row Level Security) 用于演示
+- 使用 MD5 密码加密
+- 用户数据隔离
+
+## 任务列表内容
+
+### 第一阶段：准备与规划
+- 用10分钟，列出对报告的所有疑问（不求完美，目标是头脑风暴）
+- 创建一个简单的报告大纲，确定需要分析的关键维度
+- 安排15分钟与主管沟通，确认报告范围和期望
+
+### 第二阶段：数据收集
+- 为每个产品分配30分钟，收集基本信息（使用番茄工作法）
+- 咨询产品部门获取数据或测试
+
+### 第三阶段：分析与撰写
+- 创建比较表格，突出各产品的优缺点
+- 撰写初稿（不求完美，目标是有一个可迭代的版本）
+- 请一位信任的同事审阅并提供优化建议
+- 根据反馈修改并完善报告
+
+## 开发说明
+
+这是一个演示项目，包含以下特性：
+- 简化的认证系统 (MD5 加密)
+- 禁用的 RLS 安全设置
+- 自建用户表而非 Supabase Auth
+- 用户任务关联而非全局任务
+
+## 部署
+
+项目已配置为可在 Vercel 上直接部署：
+- 自动构建和部署
+- 环境变量配置
+- 数据库连接优化
+
+## 许可证
+
+MIT License
